@@ -1,5 +1,5 @@
 %%% ----------------------------------------------------------------------------
-%%% @author Oscar Hellström <oscar@erlang-consulting.com>
+%%% @author Oscar Hellstrom <oscar@erlang-consulting.com>
 %%%
 %%% @version 0.1, 2006-08-10
 %%% @copyright 2006 Erlang Training and Consulting
@@ -30,8 +30,13 @@
 %% @end
 %% -----------------------------------------------------------------------------
 request_vars(RequestStr) ->
-	case  regexp:first_match(RequestStr, "\\?.*") of
-		{match, Start, _} ->
+	%%NOTE 
+	%%UPDATE: Hay que verificar que la funcion re funcione correctamente 
+	%%case  regexp:first_match(RequestStr, "\\?.*") of
+	io:format("**********************************************************", []),
+	case re:run(RequestStr, "\\?.*") of
+		%%{match, Start, _} ->
+		{match, [{Start, _}]} ->
 			Vars = string:tokens(string:substr(RequestStr, Start + 1), "&"),
 			lists:map(fun(Element) ->
 				case string:tokens(Element, "=") of

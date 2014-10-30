@@ -1,5 +1,5 @@
 %%% ----------------------------------------------------------------------------
-%%% @author Oscar Hellström <oscar@erlang-consulting.com>
+%%% @author Oscar Hellstrom <oscar@erlang-consulting.com>
 %%%
 %%% @version 0.3, 2006-08-10
 %%% @copyright 2006 Erlang Training and Consulting
@@ -1330,7 +1330,9 @@ split_return_string(String) ->
 %% @end
 %% -----------------------------------------------------------------------------
 extract_result(String) ->
-	{match, 1, Len} = regexp:first_match(String, "^(-)?[0-9]+"),
+	%%NOTE: UPDATE BY songomem
+	%{match, 1, Len} = regexp:first_match(String, "^(-)?[0-9]+"),
+	{match, [{1, Len}]} = re:run(String, "^(-)?[0-9]+"),
 	[string:substr(String, 1, Len)].
 
 %% -----------------------------------------------------------------------------
@@ -1341,8 +1343,10 @@ extract_result(String) ->
 %% @end
 %% -----------------------------------------------------------------------------
 extract_value(String, Acc) ->
-	case regexp:first_match(String, "\\(.+\\)") of
-		{match, Start, Len} ->
+	%%NOTE: UPDATE BY songomem
+	%case regexp:first_match(String, "\\(.+\\)") of
+	case re:run(String, "\\(.+\\)") of
+		{match, [{Start, Len}]} ->
 			[string:substr(String, Start + 1, Len - 2)|Acc];
 		nomatch ->
 			Acc
@@ -1355,8 +1359,10 @@ extract_value(String, Acc) ->
 %% @end
 %% -----------------------------------------------------------------------------
 extract_endpos(String, Acc) ->
-	case regexp:first_match(String, "endpos=[0-9]+") of 
-		{match, Start, Len} ->
+	%%NOTE: UPDATE BY songomem
+	%case regexp:first_match(String, "endpos=[0-9]+") of
+	case re:run(String, "endpos=[0-9]+") of  
+		{match, [{Start, Len}]} ->
 			[string:substr(String, Start + 7, Len - 7)|Acc];
 		nomatch ->
 			Acc

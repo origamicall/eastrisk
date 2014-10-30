@@ -1,5 +1,5 @@
 %%% ----------------------------------------------------------------------------
-%%% @author Oscar Hellström <oscar@erlang-consulting.com>
+%%% @author Oscar Hellstrm <oscar@erlang-consulting.com>
 %%%
 %%% @version 0.3, 2006-08-08
 %%% @copyright 2006 Erlang Training and Consulting
@@ -93,7 +93,10 @@
          handle_info/2,
          terminate/2,
          code_change/3]).
-
+         
+-compile({no_auto_import,[monitor/3]}).
+         
+         
 -include("ast_mgr.hrl").
 
 -record(state, {socket, callback, callback_state, pkg_acc, pkg_tbl, reply_tbl}).
@@ -1522,9 +1525,10 @@ format_queue_status([], Accs) ->
 %% </p>
 %% @end
 %% -----------------------------------------------------------------------------
+
 hex(B) when is_binary(B) ->
 	hex(binary_to_list(B));
-hex(L) when list (L) ->
+hex(L) when is_list (L) ->
   lists:flatten([hex(I) || I <- L]);
 hex(I) when I > 16#f ->
   [hex0((I band 16#f0) bsr 4), hex0((I band 16#0f))];

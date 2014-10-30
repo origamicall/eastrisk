@@ -1,6 +1,6 @@
 %%% ----------------------------------------------------------------------------
 %%% @private
-%%% @author Oscar Hellström <oscar@erlang-consulting.com>
+%%% @author Oscar Hellstrom <oscar@erlang-consulting.com>
 %%% @copyright 2006 Erlang Training and Consulting
 %%% @doc
 %%% The Eastrisk application.

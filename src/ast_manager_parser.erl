@@ -1,5 +1,5 @@
 %%% ----------------------------------------------------------------------------
-%%% @author Oscar Hellström <oscar@erlang-consulting.com>
+%%% @author Oscar Hellstrom <oscar@erlang-consulting.com>
 %%% @private
 %%% @version 0.3, 2007-05-16
 %%% @copyright 2006 Erlang Training and Consulting
@@ -11,8 +11,10 @@
 -module(ast_manager_parser).
 
 -export([
-	parse_package/1
+	parse_package/1, sip_peer_details/3
         ]).
+-compile({no_auto_import,[binary_to_integer/1]}).
+-compile({no_auto_import,[binary_to_float/1]}).
 
 -include("ast_mgr.hrl").
 
@@ -214,7 +216,9 @@ unknown_event([<<"ActionID: ", ActionID/binary>>|T], Acc, _) ->
 	unknown_event(T, Acc, binary_to_integer(ActionID));
 unknown_event([Binary|T], Acc, ActionID) ->
 	String = binary_to_list(Binary),
-	{match, Start, Len} = regexp:first_match(String, "[A-Za-z]+: "),
+	%%NOTE: Update by songomem
+	%{match, Start, Len} = regexp:first_match(String, "[A-Za-z]+: "),
+	{match, [{Start, Len}]} = re:run(String, "[A-Za-z]+: "),
 	Name = list_to_atom(string:substr(String, Start, Len - 2)),
 	Value = string:substr(String, Start + Len),
 	unknown_event(T, [{Name, Value}|Acc], ActionID);
@@ -1104,7 +1108,9 @@ privileges_list(Binary) ->
 
 cid_calling_pres(Binary) ->
 	String = binary_to_list(Binary),
-	{match, Start, Len} = regexp:first_match(String, "(-)?[0-9]+"),
+	%% NOTE: Update by songomem
+	%{match, Start, Len} = regexp:first_match(String, "(-)?[0-9]+"),
+	{match, [{Start, Len}]} = re:run(String, "(-)?[0-9]+"),
 	string:substr(String, Start, Len).
 
 list_to_atoms([String|T], Acc) ->
