@@ -11,9 +11,10 @@
 -module(ast_manager_parser).
 
 -export([
-	parse_package/1
+	parse_package/1, sip_peer_details/3
         ]).
-
+-compile({no_auto_import,[binary_to_integer/1]}).
+-compile({no_auto_import,[binary_to_float/1]}).
 -include("../include/ast_mgr.hrl").
 
 -define(IAX_RE, "(\\S+)\\s+(\\S+)\\s+\\(.\\)\\s+(\\S+)\\s+(\\S+)(\\s+\\(.\\))?\\s+((OK .*)|(\\S+))").
