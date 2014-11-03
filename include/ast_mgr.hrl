@@ -30,6 +30,8 @@
 
 -record(mbox_count,
         {
+	 mailbox,     % string()
+         urg_messages, % integer()
          old_messages, % integer()
          new_messages % integer()
         }).
@@ -63,6 +65,7 @@
          queue,       % string()
          location,    % string()
          membership,  % string()
+         member_name, % string()
          penalty,     % integer()
          calls_taken, % integer()
          last_call,   % integer()
@@ -93,6 +96,11 @@
          dynamic,          % bool()
          nat_support,      % bool()
          acl,              % bool()
+         trunk = false,         % bool()
+         text_support = false,  % bool()
+	 video_support = false, % bool()
+         encryption = false,    % bool()
+         realtime_dev = false,  % bool()
          status            % string()
         }).
 
@@ -154,18 +162,23 @@
 
 -record(channel_status,
         {
-         privilege,      % [atom()]
-         channel,        % string()
-         caller_id,      % string()
-         caller_id_name, % string()
-         account,        % string()
-         state,          % atom(), 'Up' | 'Ringing' | 'Busy' | 'Down' | 'Rsrvd' | 'OffHook' | 'Dialing' | 'Ring'
-         context,        % string()
-         extension,      % string()
-         priority,       % string()
-         seconds,        % integer()
-         link,           % string()
-         unique_id       % string()
+         privilege,      	% [atom()]
+         channel,        	% string()
+         caller_id,      	% string()
+         caller_id_name, 	% string()
+         account,        	% string()
+         state,          	% atom(), 'Up' | 'Ringing' | 'Busy' | 'Down' | 'Rsrvd' | 'OffHook' | 'Dialing' | 'Ring'
+         context,        	% string()
+         extension,      	% string()
+         priority,       	% string()
+         seconds,        	% integer()
+         link,           	% string()
+         unique_id,       	% string()
+	 channel_state,   	% string()
+	 bridged_channel, 	% string()
+	 bridget_uniqueid, 	% string()
+	 caller_id_num,		% string()
+	 account_code		% string()
         }).
 
 -record(zap_channel,
@@ -211,7 +224,11 @@
 	privilege,         % [atom()]
 	event,             % string()
 	channel,           % string()
-	state,             % atom()
+        account_code,      % string()
+        exten,             % string()
+        context,           % string()
+	state,             % atom() | number()
+	state_desc,        % atom()
 	caller_id,         % string()
 	caller_id_name,    % string()
 	caller_id_num,     % string()
@@ -234,9 +251,12 @@
 {
 	privilege,         % [atom()]
 	channel,           % string()
-	state,             % atom()
+	state,             % atom() | integer()
+        state_desc,        % atom()
 	caller_id,         % string()
 	caller_id_name,    % string()
+        line_num,          % string()
+        line_name,         % string()
 	unique_id          % string()
 }).
 
@@ -246,6 +266,25 @@
 	channel,           % string()
 	cause,             % integer()
 	cause_txt,         % string()
+	caller_id,         % string()
+	caller_id_name,    % string()
+        line_num,          % string()
+        line_name,         % string()
+	unique_id          % string()
+}).
+
+-record(hangup_request,
+{
+	privilege,         % [atom()]
+	channel,           % string()
+	unique_id          % string()
+}).
+
+-record(softhangup_request,
+{
+	privilege,         % [atom()]
+	channel,           % string()
+	cause,             % integer()
 	unique_id          % string()
 }).
 
@@ -253,6 +292,11 @@
 {
 	privilege,         % [atom()]
 	peer,              % string()
+	time,              % integer()
+        channel_type,      % string()
+        address,           % string()
+        port,              % integer()
+        cause,             % string()
 	peer_status        % atom()
 }).
 
@@ -316,6 +360,7 @@
 -record(registry,
 {
 	privilege,
+	channel_type,
 	channel,
 	username,
 	domain,
@@ -370,5 +415,90 @@
 	context,
 	exten,
 	reason,
+	response,
+	callerid,
+	calleridnum,
+	calleridname,
 	unique_id
+}).
+
+-record(agi_exec,
+{
+	result,
+	result_code,
+	command,
+	command_id,
+	channel,
+	sub_event,
+	privilege
+}).
+
+-record(var_set,
+{
+	uniqueid,
+	value,
+	variable,
+	channel,
+	privilege
+}).
+
+-record(rtcp_received,
+{
+	dlsr,
+	last_sr,
+	ia_jitter,
+	sequence_number_cycles,
+	highest_sequence,
+	packets_lost,
+	fraction_lost,
+	sender_ssrc,
+	reception_reports,
+	pt,
+	from,
+	privilege
+}).
+
+-record(rtcp_sent,
+{
+	dlsr,
+	their_last_sr,
+	ia_jitter,
+	cumulative_loss,
+	fraction_lost,
+	report_block,
+	sent_octets,
+	sent_packets,
+	sent_rtp,
+	sent_ntp,
+	our_ssrc,
+	to,
+	privilege
+}).
+
+-record(rtp_receiver_stat,
+{
+	rr_count,
+	transit,
+	jitter,
+	lost_packets,
+	received_packets,
+	ssrc,
+	privilege
+}).
+
+-record(rtp_sender_stat,
+{
+	rtt,
+	sr_count,
+	jitter,
+	lost_packets,
+	sent_packets,
+	ssrc,
+	privilege
+}).
+
+-record(fully_booted,
+{
+	status,
+	privilege
 }).

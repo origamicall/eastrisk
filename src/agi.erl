@@ -1294,15 +1294,21 @@ interpret_result(Result) ->
 %% without hacking the C code a lot. Also, the 520 should <u>not</u> happen.
 %% @end
 %% -----------------------------------------------------------------------------
+return_code(<<"HANGUP", _Value/binary>>) ->
+    200;
 return_code(<<"200", _Value/binary>>) ->
-	200;
+    200;
+return_code(<<"511", _Value/binary>>) ->
+    511;
 return_code(<<"510", _Value/binary>>) ->
-	510.
+    510.
 
 %% Extracts a return value from an Asterisk AGI response
 %% Usually returns an integer, but if the AGI commands returns a value in
 %% parenthesis the value is returned as a string.
 %% 200 [Rr]esult=Value
+return_value(<<"HANGUP", _Value/binary>>) ->
+    "-1";
 return_value(<<_Code:3/binary, _:7/binary , $=, Value/binary>>) ->
 	ResString = binary_to_list(Value),
 	List = split_return_string(ResString),
@@ -1330,10 +1336,8 @@ split_return_string(String) ->
 %% @end
 %% -----------------------------------------------------------------------------
 extract_result(String) ->
-	%%NOTE: UPDATE BY songomem
-	%{match, 1, Len} = regexp:first_match(String, "^(-)?[0-9]+"),
-	{match, [{1, Len}]} = re:run(String, "^(-)?[0-9]+"),
-	[string:substr(String, 1, Len)].
+	{match, [Result]} = re:run(String, "^(-)?[0-9]+", [{capture, first, list}]),
+	[Result].
 
 %% -----------------------------------------------------------------------------
 %% @spec extract_value(String::string(), Acc::list()) -> list()
@@ -1343,11 +1347,9 @@ extract_result(String) ->
 %% @end
 %% -----------------------------------------------------------------------------
 extract_value(String, Acc) ->
-	%%NOTE: UPDATE BY songomem
-	%case regexp:first_match(String, "\\(.+\\)") of
-	case re:run(String, "\\(.+\\)") of
-		{match, [{Start, Len}]} ->
-			[string:substr(String, Start + 1, Len - 2)|Acc];
+	case re:run(String, "\\((.+)\\)", [{capture, [1], list}]) of
+		{match, [Value|_]} ->
+			[Value|Acc];
 		nomatch ->
 			Acc
 	end.
@@ -1359,11 +1361,9 @@ extract_value(String, Acc) ->
 %% @end
 %% -----------------------------------------------------------------------------
 extract_endpos(String, Acc) ->
-	%%NOTE: UPDATE BY songomem
-	%case regexp:first_match(String, "endpos=[0-9]+") of
-	case re:run(String, "endpos=[0-9]+") of  
-		{match, [{Start, Len}]} ->
-			[string:substr(String, Start + 7, Len - 7)|Acc];
+	case re:run(String, "endpos=([0-9]+)", [{capture, [1], list}]) of 
+		{match, [EndPos|_]} ->
+			[EndPos|Acc];
 		nomatch ->
 			Acc
 	end.

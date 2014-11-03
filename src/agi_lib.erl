@@ -30,14 +30,9 @@
 %% @end
 %% -----------------------------------------------------------------------------
 request_vars(RequestStr) ->
-	%%NOTE 
-	%%UPDATE: Hay que verificar que la funcion re funcione correctamente 
-	%%case  regexp:first_match(RequestStr, "\\?.*") of
-	io:format("**********************************************************", []),
-	case re:run(RequestStr, "\\?.*") of
-		%%{match, Start, _} ->
-		{match, [{Start, _}]} ->
-			Vars = string:tokens(string:substr(RequestStr, Start + 1), "&"),
+	case  re:run(RequestStr, "\\?(.*)", [{capture, [1], list}]) of
+		{match, [QueryStr]} ->
+			Vars = string:tokens(QueryStr, "&"),
 			lists:map(fun(Element) ->
 				case string:tokens(Element, "=") of
 					[Name, Value] -> ok;

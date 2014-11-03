@@ -1,5 +1,5 @@
 %%% ----------------------------------------------------------------------------
-%%% @author Oscar Hellstrm <oscar@erlang-consulting.com>
+%%% @author Oscar Hellstrom <oscar@erlang-consulting.com>
 %%%
 %%% @version 0.3, 2006-08-08
 %%% @copyright 2006 Erlang Training and Consulting
@@ -42,6 +42,11 @@
          agents/0,
          change_monitor/2,
          command/1,
+         confbridge_list_rooms/0,
+         confbridge_list/1,
+         confbridge_mute/2,
+         confbridge_unmute/2,
+         confbridge_kick/2,
          db_get/2,
          db_put/3,
          extension_state/2,
@@ -50,7 +55,7 @@
          get_var/2,
          hangup/1,
          iax_netstats/0,
-	 iax_peers/0,
+         iax_peers/0,
          list_commands/0,
          login/2,
          logoff/0,
@@ -86,6 +91,11 @@
          zap_show_channels/0,
          zap_transfer/1]).
 
+-export([
+         action/2,
+         send_event_response_cmd/1
+        ]).
+
 %%% gen_server callbacks
 -export([init/1,
          handle_call/3,
@@ -93,13 +103,13 @@
          handle_info/2,
          terminate/2,
          code_change/3]).
-         
+
 -compile({no_auto_import,[monitor/3]}).
-         
-         
+
 -include("ast_mgr.hrl").
 
--record(state, {socket, callback, callback_state, pkg_acc, pkg_tbl, reply_tbl}).
+-record(state, {socket, active, connect_args, callback, callback_state,
+                pkg_acc, pkg_tbl, reply_tbl}).
 
 -define(NAME, ast_manager).
 
@@ -134,7 +144,8 @@ stop() ->
 %% @hidden
 %% -----------------------------------------------------------------------------
 behaviour_info(callbacks) ->
-    [{handle_event, 2}, {init, 1}, {terminate, 2}, {code_change, 3}];
+    [{handle_event, 2}, {init, 1}, {terminate, 2}, {code_change, 3},
+     {connected, 1}];
 behaviour_info(_Other) ->
     undefined.
 
@@ -246,6 +257,67 @@ change_monitor(Channel, File) ->
 command(Command) ->
 	Cmd = action("Command", [{"Command", Command}]),
 	send_cmd(Cmd).
+
+%% -----------------------------------------------------------------------------
+%% @spec confbridge_list_rooms() -> mgr_response()
+%% @doc
+%% Lists data about all active conferences. 
+%% @end
+%% -----------------------------------------------------------------------------
+confbridge_list_rooms() ->
+    send_event_response_cmd(action("ConfbridgeListRooms", [])).
+
+%% -----------------------------------------------------------------------------
+%% @spec confbridge_list_rooms(Conference::string()) -> mgr_response()
+%% @doc
+%% Lists all users in a particular ConfBridge conference.
+%% @end
+%% -----------------------------------------------------------------------------
+confbridge_list(Conference) ->
+    send_event_response_cmd(action("ConfbridgeList",
+                                               [{"Conference", Conference}])).
+
+%% -----------------------------------------------------------------------------
+%% @spec confbridge_mute(Conference::string(), Channel::string()) ->
+%%                                                              mgr_response()
+%% @doc
+%% Mutes a specified user in a specified conference.
+%% @end
+%% -----------------------------------------------------------------------------
+confbridge_mute(Conference, Channel) ->
+    send_event_response_cmd(action("ConfbridgeMute",
+                                               [
+                                                {"Conference", Conference},
+                                                {"Channel",    Channel}
+                                               ])).
+
+%% -----------------------------------------------------------------------------
+%% @spec confbridge_mute(Conference::string(), Channel::string()) ->
+%%                                                              mgr_response()
+%% @doc
+%% Unmutes a specified user in a specified conference.
+%% @end
+%% -----------------------------------------------------------------------------
+confbridge_unmute(Conference, Channel) ->
+    send_event_response_cmd(action("ConfbridgeUnmute",
+                                               [
+                                                {"Conference", Conference},
+                                                {"Channel",    Channel}
+                                               ])).
+
+%% -----------------------------------------------------------------------------
+%% @spec confbridge_mute(Conference::string(), Channel::string()) ->
+%%                                                              mgr_response()
+%% @doc
+%% Removes a specified user from a specified conference.
+%% @end
+%% -----------------------------------------------------------------------------
+confbridge_kick(Conference, Channel) ->
+    send_event_response_cmd(action("ConfbridgeKick",
+                                               [
+                                                {"Conference", Conference},
+                                                {"Channel",    Channel}
+                                               ])).
 
 %% -----------------------------------------------------------------------------
 %% @spec db_get(Family, Key) -> {ok, Value} | {error, Message}
@@ -401,8 +473,9 @@ login(Name, Passwd) ->
 	{ok, Challange} = send_cmd(Challenge),
 	Key = hex(erlang:md5(Challange ++ Passwd)),
 	Login = action("Login", [{"AuthType", "MD5"},
-							 {"UserName", Name},
-							 {"Key", Key}]),
+                                {"UserName", Name},
+                                {"Events", "Off"},
+                                {"Key", Key}]),
 	case send_cmd(Login) of
 		{ok, _} -> ok;
 		Error -> Error
@@ -658,9 +731,16 @@ parked_calls() ->
 %% @end
 %% -----------------------------------------------------------------------------
 ping() ->
+        %io:format("AM PING1 ~n",[]),
 	Cmd = action("Ping", []),
-	{pong, _} = send_cmd(Cmd),
-	pong.
+        %io:format("AM PING2 ~p ~n",[Cmd]),
+	%{pong, _} = send_cmd(Cmd),
+	%pong.
+        case send_cmd(Cmd) of
+            {pong, ok}-> pong;
+            {ok,   _} -> pong;
+            _         -> pang
+        end.
 
 %% -----------------------------------------------------------------------------
 %% @spec play_dtmf(Channel::string(), Digit::string()) -> mgr_response()
@@ -1144,28 +1224,28 @@ zap_transfer(ZapChannel) ->
 %% @hidden
 init({Callback, Host, Port, Args}) ->
 	{ok, CBState} = Callback:init(Args),
-	TCPOpts = [binary, {active, true}, {packet, line}],
-	case gen_tcp:connect(Host, Port, TCPOpts) of
-		{ok, Socket} ->
-			RTTid = ets:new(reply, [set, protected, {keypos, 1}]),
-			PKGTid = ets:new(pkgs, [bag, protected, {keypos, 1}]),
-			{ok, #state{socket = Socket,
-						callback = Callback,
-						callback_state = CBState,
-						reply_tbl = RTTid,
-						pkg_tbl = PKGTid,
-						pkg_acc = []}};
-		Error ->
-			% ugly hack to not make it hammer with connection attempts
-			timer:sleep(1000),
-			exit(Error)
-	end.
+    TCPOpts = [binary, {active, true}, {packet, line}],
+
+    RTTid  = ets:new(reply, [set, protected, {keypos, 1}]),
+    PKGTid = ets:new(pkgs,  [bag, protected, {keypos, 1}]),
+
+    self() ! reconnect,
+
+    {ok, #state{active = false,
+                connect_args = [Host, Port, TCPOpts, 12000],
+                callback = Callback,
+                callback_state = CBState,
+                reply_tbl = RTTid,
+                pkg_tbl = PKGTid,
+                pkg_acc = []}}.
 
 %% @hidden
 handle_cast(Request, State) ->
 	{stop, {unhandled_cast, Request}, State}.
 
 %% @hidden
+handle_call(Call, _From, #state{active = false} = State) when Call =/= '__stop' ->
+    {reply, {error, disconnected}, State};
 handle_call({'__send', Pkg}, From, State) ->
 	Id = action_id(),
 	gen_tcp:send(State#state.socket, add_action_id(Pkg, Id)),
@@ -1186,12 +1266,22 @@ handle_call(Request, From, State) ->
 	{stop, {unhandled_call, {Request, From}}, State}.
 
 %% @hidden
+handle_info(reconnect, State) ->
+    error_logger:info_msg("connect ~p", [State#state.connect_args]),
+    case connect(State) of
+		{ok, NewState} ->
+			{noreply, NewState};
+		Error ->
+            error_logger:info_msg("connection error ~p", [Error]),
+            disconnect(State)
+    end;
 handle_info({tcp, _Socket, <<"\r\n">>}, State) ->
     case State#state.pkg_acc of
 	[] ->
 	    {noreply, State};
 	_ ->
 	    Pkg = ast_manager_parser:parse_package(lists:reverse(State#state.pkg_acc)),
+            %io:format("AMHI: ~p ~n", [Pkg]),
 	    case Pkg of
 		[] ->
 		    {noreply, State};
@@ -1211,10 +1301,9 @@ handle_info({tcp, _Socket, <<"\n">>}, State) ->
 handle_info({tcp, _Socket, Data}, State) ->
 	Line = strip_nl(Data),
 	{noreply, State#state{pkg_acc = [Line | State#state.pkg_acc]}};
-handle_info({tcp_closed, Socket}, State) ->
-	{stop, {tcp_closed, Socket}, State};
-handle_info({tcp_error, Socket, Reason}, State) ->
-	{stop, {tcp_error, Socket, Reason}, State};
+handle_info({tcp_closed, _Socket}, State)         -> disconnect(State);
+handle_info({tcp_error, _Socket, _Reason}, State) -> disconnect(State);
+
 handle_info(Info, State) ->
 	{stop, {unhandled_info, Info}, State}.
 
@@ -1223,6 +1312,9 @@ terminate(Reason = {tcp_error, _Socket, _TCPReason}, State) ->
 	Callback = State#state.callback,
 	Callback:terminate(Reason, State#state.callback_state);
 terminate(Reason = {tcp_closed, _Socket}, State) ->
+	Callback = State#state.callback,
+	Callback:terminate(Reason, State#state.callback_state);
+terminate(Reason, #state{active = false} = State) ->
 	Callback = State#state.callback,
 	Callback:terminate(Reason, State#state.callback_state);
 terminate(Reason, State) ->
@@ -1260,11 +1352,15 @@ handle_mgr_package(#state{callback = Callback, callback_state = CBState},
 	Callback:handle_event({ID, Record}, CBState);
 handle_mgr_package(State, {event, ID, Record, ActionID}) ->
 	case ID of % some return values will include more than one package
-		'OriginateFailure' ->
+		'OriginateResponse' ->
 			ets:insert(State#state.pkg_tbl, {ActionID, Record}),
 			send_reply(State#state.reply_tbl,
 				State#state.pkg_tbl, ActionID);
 		'OriginateSuccess' ->
+			ets:insert(State#state.pkg_tbl, {ActionID, Record}),
+			send_reply(State#state.reply_tbl,
+				State#state.pkg_tbl, ActionID);
+		'OriginateFailure' ->
 			ets:insert(State#state.pkg_tbl, {ActionID, Record}),
 			send_reply(State#state.reply_tbl,
 				State#state.pkg_tbl, ActionID);
@@ -1289,6 +1385,12 @@ handle_mgr_package(State, {event, ID, Record, ActionID}) ->
 					   State#state.pkg_tbl, ActionID);
 		'AgentsComplete' ->
 			send_reply(State#state.reply_tbl,
+					   State#state.pkg_tbl, ActionID);
+        'ConfbridgeListRoomsComplete' ->
+			send_reply(State#state.reply_tbl,
+					   State#state.pkg_tbl, ActionID);
+        'ConfbridgeListComplete' ->
+            send_reply(State#state.reply_tbl,
 					   State#state.pkg_tbl, ActionID);
 		_Else -> % collect package to return all of them together
 			ets:insert(State#state.pkg_tbl,
@@ -1343,6 +1445,7 @@ strip_nl(Binary) ->
 %% @end
 %% -----------------------------------------------------------------------------
 send_cmd(Cmd) ->
+        %io:format("AM SM: ~p ~p ~n", [?NAME, Cmd]),
 	gen_server:call(?NAME, {'__send', Cmd}).
 
 
@@ -1390,6 +1493,39 @@ send_reply(ReplyTid, PkgTid, ActionID) ->
 	ets:delete(ReplyTid, ActionID),
 	ets:delete(PkgTid, ActionID),
 	gen_server:reply(To, {ok, Pkgs}).
+
+%% @private
+%% Connect the socket if disconnected
+connect(#state{socket         = undefined,
+               connect_args   = ConnectArgs,
+               callback       = Callback,
+               callback_state = CBState
+              } = State) ->
+    case apply(gen_tcp, connect, ConnectArgs) of
+		{ok, Socket} ->
+            proc_lib:spawn_link(Callback, connected, [CBState]),
+			{ok, State#state{socket = Socket, active = true}};
+		Error ->
+            Error
+    end.
+
+%% @private
+%% Disconnect socket if connected
+disconnect(#state{socket = Socket, pkg_tbl = PKGTid,
+                  reply_tbl = RTTid} = State) ->
+
+    case Socket of
+        undefined -> ok;
+        Sock      -> gen_tcp:close(Sock)
+    end,
+
+    ets:delete_all_objects(PKGTid),
+    ets:delete_all_objects(RTTid),
+
+    NewState = State#state{socket = undefined, active = false, pkg_acc = []},
+    
+    erlang:send_after(1000, self(), reconnect),
+    {noreply, NewState}.
 
 %% -----------------------------------------------------------------------------
 %% @spec action_id() -> integer()
@@ -1525,10 +1661,9 @@ format_queue_status([], Accs) ->
 %% </p>
 %% @end
 %% -----------------------------------------------------------------------------
-
 hex(B) when is_binary(B) ->
 	hex(binary_to_list(B));
-hex(L) when is_list (L) ->
+hex(L) when is_list(L) ->
   lists:flatten([hex(I) || I <- L]);
 hex(I) when I > 16#f ->
   [hex0((I band 16#f0) bsr 4), hex0((I band 16#0f))];
